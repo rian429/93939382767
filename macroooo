@@ -3,16 +3,19 @@ local VIM = game:GetService("VirtualInputManager")
 local LP = game.Players.LocalPlayer
 local PlayerGui = LP:WaitForChild("PlayerGui")
 
--- ลบ UI เก่าป้องกันการซ้อน
-if PlayerGui:FindFirstChild("PandaPanda_LegacyReturn") then PlayerGui.PandaPanda_LegacyReturn:Destroy() end
+-- Remove old UI
+if PlayerGui:FindFirstChild("PandaPanda_LegacyReturn") then
+    PlayerGui.PandaPanda_LegacyReturn:Destroy()
+end
 
 local sg = Instance.new("ScreenGui", PlayerGui)
 sg.Name = "PandaPanda_LegacyReturn"
 sg.ResetOnSpawn = false
 
-local isLocked = false 
+local isLocked = false
+local points = {}
 
--- ฟังก์ชันค้นหาปุ่มใต้พิกัด (ระบบเก่า)
+-- Get target button under a point
 local function getTarget(frame)
     local x, y = frame.AbsolutePosition.X + 25, frame.AbsolutePosition.Y + 25
     local objs = PlayerGui:GetGuiObjectsAtPosition(x, y)
@@ -24,7 +27,7 @@ local function getTarget(frame)
     return nil
 end
 
--- ระบบลากแบบสมูท (Anti-Warp ที่คุณชอบ)
+-- Make frame draggable
 local function makeDraggable(frame)
     local dragging, dragStart, startPos
     frame.InputBegan:Connect(function(input)
@@ -43,8 +46,7 @@ local function makeDraggable(frame)
     UIS.InputEnded:Connect(function() dragging = false end)
 end
 
--- สร้างจุดมาโคร 3 จุด
-local points = {}
+-- Create a draggable point (with hold-to-delete)
 local function createPoint(id, color, pos)
     local f = Instance.new("Frame", sg)
     f.Name = "Point"..id
@@ -63,15 +65,51 @@ local function createPoint(id, color, pos)
     l.TextSize = 25
     
     makeDraggable(f)
+    
+    -- Hold-to-delete system
+    local holdTime = 1 -- seconds
+    local holding = false
+    local holdStart = 0
+    
+    f.InputBegan:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+            holding = true
+            holdStart = tick()
+            task.spawn(function()
+                while holding do
+                    if tick() - holdStart >= holdTime then
+                        f:Destroy()
+                        for i=#points,1,-1 do
+                            if points[i] == f then
+                                table.remove(points, i)
+                                break
+                            end
+                        end
+                        holding = false
+                        break
+                    end
+                    task.wait(0.1)
+                end
+            end)
+        end
+    end)
+    
+    f.InputEnded:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+            holding = false
+        end
+    end)
+    
     table.insert(points, f)
     return f
 end
 
+-- Create initial 3 points
 local p1 = createPoint(1, Color3.fromRGB(0, 160, 255), UDim2.new(0.5, -25, 0.7, 0))
 local p2 = createPoint(2, Color3.fromRGB(255, 20, 147), UDim2.new(0.5, -25, 0.8, 0))
 local p3 = createPoint(3, Color3.fromRGB(0, 255, 150), UDim2.new(0.5, -25, 0.9, 0))
 
--- ปุ่ม PLAY (รัวแรง 0.5s + 1ms)
+-- Play Macro Button
 local play = Instance.new("TextButton", sg)
 play.Name = "MainBtn"
 play.Size = UDim2.new(0, 80, 0, 80)
@@ -83,7 +121,7 @@ play.Font = Enum.Font.SourceSansBold
 Instance.new("UICorner", play).CornerRadius = UDim.new(1, 0)
 makeDraggable(play)
 
--- ปุ่มล็อค UI
+-- Lock UI Button
 local lockBtn = Instance.new("TextButton", sg)
 lockBtn.Size = UDim2.new(0, 90, 0, 30)
 lockBtn.Position = UDim2.new(0, 10, 0, 10)
@@ -98,7 +136,7 @@ lockBtn.MouseButton1Click:Connect(function()
     lockBtn.BackgroundColor3 = isLocked and Color3.fromRGB(200, 50, 50) or Color3.fromRGB(50, 50, 50)
 end)
 
--- ปุ่มซ่อนจุด
+-- Hide/Show Points Button
 local hideBtn = Instance.new("TextButton", sg)
 hideBtn.Size = UDim2.new(0, 90, 0, 30)
 hideBtn.Position = UDim2.new(0, 10, 0, 45)
@@ -113,7 +151,23 @@ hideBtn.MouseButton1Click:Connect(function()
     hideBtn.Text = isVisible and "👁️ SHOW" or "🙈 HIDE"
 end)
 
--- ระบบรัวแบบดั้งเดิม (Hybrid: firesignal + Touch + 1ms)
+-- Add Point Button
+local addBtn = Instance.new("TextButton", sg)
+addBtn.Size = UDim2.new(0, 90, 0, 30)
+addBtn.Position = UDim2.new(0, 10, 0, 80)
+addBtn.Text = "➕ ADD"
+addBtn.BackgroundColor3 = Color3.fromRGB(50, 50, 50)
+addBtn.TextColor3 = Color3.new(1, 1, 1)
+Instance.new("UICorner", addBtn)
+
+addBtn.MouseButton1Click:Connect(function()
+    local id = #points + 1
+    local color = Color3.fromHSV(math.random(), 0.8, 1) -- random color
+    local pos = UDim2.new(0.5, -25, 0.5, -25) -- default position
+    createPoint(id, color, pos)
+end)
+
+-- Macro execution
 play.MouseButton1Click:Connect(function()
     task.spawn(function()
         local endTime = tick() + 0.2
@@ -122,15 +176,13 @@ play.MouseButton1Click:Connect(function()
                 local t = getTarget(p)
                 local x, y = p.AbsolutePosition.X + 25, p.AbsolutePosition.Y + 25 + 36
                 task.spawn(function()
-                    -- ระบบสั่งตรง
                     if t and firesignal then firesignal(t.MouseButton1Click) firesignal(t.TouchTap) end
-                    -- ระบบจำลองนิ้ว (แบบดั้งเดิม)
                     VIM:SendTouchEvent(i, Enum.UserInputState.Begin, x, y)
                     task.wait()
                     VIM:SendTouchEvent(i, Enum.UserInputState.End, x, y)
                 end)
             end
-            task.wait(0.001) -- 1 มิลลิวินาที
+            task.wait(0.001)
         end
     end)
 end)
