@@ -27,26 +27,49 @@ local function getTarget(frame)
     return nil
 end
 
--- Make frame draggable
+-- Make frame draggable (topmost-only)
 local function makeDraggable(frame)
     local dragging, dragStart, startPos
+
     frame.InputBegan:Connect(function(input)
-        if not isLocked and (input.UserInputType == Enum.UserInputType.Touch or input.UserInputType == Enum.UserInputType.MouseButton1) then
-            dragging = true
-            dragStart = input.Position
-            startPos = frame.Position
+        if isLocked then return end
+        if input.UserInputType ~= Enum.UserInputType.MouseButton1 and input.UserInputType ~= Enum.UserInputType.Touch then return end
+
+        -- Check topmost point under cursor
+        local x, y = input.Position.X, input.Position.Y
+        local top = nil
+        for _, p in ipairs(points) do
+            local absPos, size = p.AbsolutePosition, p.AbsoluteSize
+            if x >= absPos.X and x <= absPos.X + size.X and y >= absPos.Y and y <= absPos.Y + size.Y then
+                top = p -- last in loop = topmost
+            end
         end
+
+        if top ~= frame then return end
+
+        dragging = true
+        dragStart = input.Position
+        startPos = frame.Position
     end)
+
     UIS.InputChanged:Connect(function(input)
         if dragging and not isLocked and (input.UserInputType == Enum.UserInputType.Touch or input.UserInputType == Enum.UserInputType.MouseMovement) then
             local delta = input.Position - dragStart
-            frame.Position = UDim2.new(startPos.X.Scale, startPos.X.Offset + delta.X, startPos.Y.Scale, startPos.Y.Offset + delta.Y)
+            frame.Position = UDim2.new(
+                startPos.X.Scale, startPos.X.Offset + delta.X,
+                startPos.Y.Scale, startPos.Y.Offset + delta.Y
+            )
         end
     end)
-    UIS.InputEnded:Connect(function() dragging = false end)
+
+    UIS.InputEnded:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+            dragging = false
+        end
+    end)
 end
 
--- Create a draggable point (with hold-to-delete)
+-- Create a draggable point
 local function createPoint(id, color, pos)
     local f = Instance.new("Frame", sg)
     f.Name = "Point"..id
@@ -55,7 +78,7 @@ local function createPoint(id, color, pos)
     f.BackgroundColor3 = color
     f.BackgroundTransparency = 0.4
     Instance.new("UICorner", f).CornerRadius = UDim.new(1, 0)
-    
+
     local l = Instance.new("TextLabel", f)
     l.Size = UDim2.new(1,0,1,0)
     l.Text = tostring(id)
@@ -63,48 +86,13 @@ local function createPoint(id, color, pos)
     l.BackgroundTransparency = 1
     l.Font = Enum.Font.SourceSansBold
     l.TextSize = 25
-    
+
     makeDraggable(f)
-    
-    -- Hold-to-delete system
-    local holdTime = 1 -- seconds
-    local holding = false
-    local holdStart = 0
-    
-    f.InputBegan:Connect(function(input)
-        if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
-            holding = true
-            holdStart = tick()
-            task.spawn(function()
-                while holding do
-                    if tick() - holdStart >= holdTime then
-                        f:Destroy()
-                        for i=#points,1,-1 do
-                            if points[i] == f then
-                                table.remove(points, i)
-                                break
-                            end
-                        end
-                        holding = false
-                        break
-                    end
-                    task.wait(0.1)
-                end
-            end)
-        end
-    end)
-    
-    f.InputEnded:Connect(function(input)
-        if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
-            holding = false
-        end
-    end)
-    
     table.insert(points, f)
     return f
 end
 
--- Create initial 3 points
+-- Initial 3 points
 local p1 = createPoint(1, Color3.fromRGB(0, 160, 255), UDim2.new(0.5, -25, 0.7, 0))
 local p2 = createPoint(2, Color3.fromRGB(255, 20, 147), UDim2.new(0.5, -25, 0.8, 0))
 local p3 = createPoint(3, Color3.fromRGB(0, 255, 150), UDim2.new(0.5, -25, 0.9, 0))
@@ -133,56 +121,4 @@ Instance.new("UICorner", lockBtn)
 lockBtn.MouseButton1Click:Connect(function()
     isLocked = not isLocked
     lockBtn.Text = isLocked and "🔒 LOCKED" or "🔓 UNLOCK"
-    lockBtn.BackgroundColor3 = isLocked and Color3.fromRGB(200, 50, 50) or Color3.fromRGB(50, 50, 50)
-end)
-
--- Hide/Show Points Button
-local hideBtn = Instance.new("TextButton", sg)
-hideBtn.Size = UDim2.new(0, 90, 0, 30)
-hideBtn.Position = UDim2.new(0, 10, 0, 45)
-hideBtn.Text = "👁️ SHOW"
-hideBtn.BackgroundColor3 = Color3.fromRGB(50, 50, 50)
-hideBtn.TextColor3 = Color3.new(1, 1, 1)
-Instance.new("UICorner", hideBtn)
-
-hideBtn.MouseButton1Click:Connect(function()
-    local isVisible = not points[1].Visible
-    for _, p in pairs(points) do p.Visible = isVisible end
-    hideBtn.Text = isVisible and "👁️ SHOW" or "🙈 HIDE"
-end)
-
--- Add Point Button
-local addBtn = Instance.new("TextButton", sg)
-addBtn.Size = UDim2.new(0, 90, 0, 30)
-addBtn.Position = UDim2.new(0, 10, 0, 80)
-addBtn.Text = "➕ ADD"
-addBtn.BackgroundColor3 = Color3.fromRGB(50, 50, 50)
-addBtn.TextColor3 = Color3.new(1, 1, 1)
-Instance.new("UICorner", addBtn)
-
-addBtn.MouseButton1Click:Connect(function()
-    local id = #points + 1
-    local color = Color3.fromHSV(math.random(), 0.8, 1) -- random color
-    local pos = UDim2.new(0.5, -25, 0.5, -25) -- default position
-    createPoint(id, color, pos)
-end)
-
--- Macro execution
-play.MouseButton1Click:Connect(function()
-    task.spawn(function()
-        local endTime = tick() + 0.2
-        while tick() < endTime do
-            for i, p in pairs(points) do
-                local t = getTarget(p)
-                local x, y = p.AbsolutePosition.X + 25, p.AbsolutePosition.Y + 25 + 36
-                task.spawn(function()
-                    if t and firesignal then firesignal(t.MouseButton1Click) firesignal(t.TouchTap) end
-                    VIM:SendTouchEvent(i, Enum.UserInputState.Begin, x, y)
-                    task.wait()
-                    VIM:SendTouchEvent(i, Enum.UserInputState.End, x, y)
-                end)
-            end
-            task.wait(0.001)
-        end
-    end)
-end)
+    lockBtn.BackgroundColor3 = isLocked and Color3.fromRGB(200, 50, 50)
