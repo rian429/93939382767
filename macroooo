@@ -3,19 +3,16 @@ local VIM = game:GetService("VirtualInputManager")
 local LP = game.Players.LocalPlayer
 local PlayerGui = LP:WaitForChild("PlayerGui")
 
--- Remove old UI
-if PlayerGui:FindFirstChild("PandaPanda_LegacyReturn") then
-    PlayerGui.PandaPanda_LegacyReturn:Destroy()
-end
+-- ลบ UI เก่าป้องกันการซ้อน
+if PlayerGui:FindFirstChild("PandaPanda_LegacyReturn") then PlayerGui.PandaPanda_LegacyReturn:Destroy() end
 
 local sg = Instance.new("ScreenGui", PlayerGui)
 sg.Name = "PandaPanda_LegacyReturn"
 sg.ResetOnSpawn = false
 
-local isLocked = false
-local points = {}
+local isLocked = false 
 
--- Get target button under a point
+-- ฟังก์ชันค้นหาปุ่มใต้พิกัด (ระบบเก่า)
 local function getTarget(frame)
     local x, y = frame.AbsolutePosition.X + 25, frame.AbsolutePosition.Y + 25
     local objs = PlayerGui:GetGuiObjectsAtPosition(x, y)
@@ -27,49 +24,27 @@ local function getTarget(frame)
     return nil
 end
 
--- Make frame draggable (topmost-only)
+-- ระบบลากแบบสมูท (Anti-Warp ที่คุณชอบ)
 local function makeDraggable(frame)
     local dragging, dragStart, startPos
-
     frame.InputBegan:Connect(function(input)
-        if isLocked then return end
-        if input.UserInputType ~= Enum.UserInputType.MouseButton1 and input.UserInputType ~= Enum.UserInputType.Touch then return end
-
-        -- Check topmost point under cursor
-        local x, y = input.Position.X, input.Position.Y
-        local top = nil
-        for _, p in ipairs(points) do
-            local absPos, size = p.AbsolutePosition, p.AbsoluteSize
-            if x >= absPos.X and x <= absPos.X + size.X and y >= absPos.Y and y <= absPos.Y + size.Y then
-                top = p -- last in loop = topmost
-            end
+        if not isLocked and (input.UserInputType == Enum.UserInputType.Touch or input.UserInputType == Enum.UserInputType.MouseButton1) then
+            dragging = true
+            dragStart = input.Position
+            startPos = frame.Position
         end
-
-        if top ~= frame then return end
-
-        dragging = true
-        dragStart = input.Position
-        startPos = frame.Position
     end)
-
     UIS.InputChanged:Connect(function(input)
         if dragging and not isLocked and (input.UserInputType == Enum.UserInputType.Touch or input.UserInputType == Enum.UserInputType.MouseMovement) then
             local delta = input.Position - dragStart
-            frame.Position = UDim2.new(
-                startPos.X.Scale, startPos.X.Offset + delta.X,
-                startPos.Y.Scale, startPos.Y.Offset + delta.Y
-            )
+            frame.Position = UDim2.new(startPos.X.Scale, startPos.X.Offset + delta.X, startPos.Y.Scale, startPos.Y.Offset + delta.Y)
         end
     end)
-
-    UIS.InputEnded:Connect(function(input)
-        if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
-            dragging = false
-        end
-    end)
+    UIS.InputEnded:Connect(function() dragging = false end)
 end
 
--- Create a draggable point
+-- สร้างจุดมาโคร 3 จุด
+local points = {}
 local function createPoint(id, color, pos)
     local f = Instance.new("Frame", sg)
     f.Name = "Point"..id
@@ -78,7 +53,7 @@ local function createPoint(id, color, pos)
     f.BackgroundColor3 = color
     f.BackgroundTransparency = 0.4
     Instance.new("UICorner", f).CornerRadius = UDim.new(1, 0)
-
+    
     local l = Instance.new("TextLabel", f)
     l.Size = UDim2.new(1,0,1,0)
     l.Text = tostring(id)
@@ -86,18 +61,17 @@ local function createPoint(id, color, pos)
     l.BackgroundTransparency = 1
     l.Font = Enum.Font.SourceSansBold
     l.TextSize = 25
-
+    
     makeDraggable(f)
     table.insert(points, f)
     return f
 end
 
--- Initial 3 points
 local p1 = createPoint(1, Color3.fromRGB(0, 160, 255), UDim2.new(0.5, -25, 0.7, 0))
 local p2 = createPoint(2, Color3.fromRGB(255, 20, 147), UDim2.new(0.5, -25, 0.8, 0))
 local p3 = createPoint(3, Color3.fromRGB(0, 255, 150), UDim2.new(0.5, -25, 0.9, 0))
 
--- Play Macro Button
+-- ปุ่ม PLAY (รัวแรง 0.5s + 1ms)
 local play = Instance.new("TextButton", sg)
 play.Name = "MainBtn"
 play.Size = UDim2.new(0, 80, 0, 80)
@@ -109,7 +83,7 @@ play.Font = Enum.Font.SourceSansBold
 Instance.new("UICorner", play).CornerRadius = UDim.new(1, 0)
 makeDraggable(play)
 
--- Lock UI Button
+-- ปุ่มล็อค UI
 local lockBtn = Instance.new("TextButton", sg)
 lockBtn.Size = UDim2.new(0, 90, 0, 30)
 lockBtn.Position = UDim2.new(0, 10, 0, 10)
@@ -121,4 +95,42 @@ Instance.new("UICorner", lockBtn)
 lockBtn.MouseButton1Click:Connect(function()
     isLocked = not isLocked
     lockBtn.Text = isLocked and "🔒 LOCKED" or "🔓 UNLOCK"
-    lockBtn.BackgroundColor3 = isLocked and Color3.fromRGB(200, 50, 50)
+    lockBtn.BackgroundColor3 = isLocked and Color3.fromRGB(200, 50, 50) or Color3.fromRGB(50, 50, 50)
+end)
+
+-- ปุ่มซ่อนจุด
+local hideBtn = Instance.new("TextButton", sg)
+hideBtn.Size = UDim2.new(0, 90, 0, 30)
+hideBtn.Position = UDim2.new(0, 10, 0, 45)
+hideBtn.Text = "👁️ SHOW"
+hideBtn.BackgroundColor3 = Color3.fromRGB(50, 50, 50)
+hideBtn.TextColor3 = Color3.new(1, 1, 1)
+Instance.new("UICorner", hideBtn)
+
+hideBtn.MouseButton1Click:Connect(function()
+    local isVisible = not points[1].Visible
+    for _, p in pairs(points) do p.Visible = isVisible end
+    hideBtn.Text = isVisible and "👁️ SHOW" or "🙈 HIDE"
+end)
+
+-- ระบบรัวแบบดั้งเดิม (Hybrid: firesignal + Touch + 1ms)
+play.MouseButton1Click:Connect(function()
+    task.spawn(function()
+        local endTime = tick() + 0.2
+        while tick() < endTime do
+            for i, p in pairs(points) do
+                local t = getTarget(p)
+                local x, y = p.AbsolutePosition.X + 25, p.AbsolutePosition.Y + 25 + 36
+                task.spawn(function()
+                    -- ระบบสั่งตรง
+                    if t and firesignal then firesignal(t.MouseButton1Click) firesignal(t.TouchTap) end
+                    -- ระบบจำลองนิ้ว (แบบดั้งเดิม)
+                    VIM:SendTouchEvent(i, Enum.UserInputState.Begin, x, y)
+                    task.wait()
+                    VIM:SendTouchEvent(i, Enum.UserInputState.End, x, y)
+                end)
+            end
+            task.wait(0.001) -- 1 มิลลิวินาที
+        end
+    end)
+end)
