@@ -133,4 +133,4 @@ play.MouseButton1Click:Connect(function()
             task.wait(0.001) -- 1 มิลลิวินาที
         end
     end)
-end
+end)
